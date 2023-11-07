@@ -1,0 +1,157 @@
+version: '3.4'
+services:
+  nodeguard_postgres:
+    hostname: nodeguard_postgres
+    image: postgres:13
+    restart: always
+    environment:
+      POSTGRES_DB: nodeguard
+      POSTGRES_USER: rw_dev
+      POSTGRES_PASSWORD: rw_dev
+      TZ: Europe/Madrid
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+  loopserver:
+    hostname: loopserver
+    #ports:
+    #  - "11009:11009"
+    extra_hosts:
+      - "alice:host-gateway"
+    image: lightninglabs/loopserver:v0.9.147-beta
+    restart: unless-stopped
+    command:
+      - "daemon"
+      - "--maxamt=5000000"
+      - "--lnd.host=alice:10001"
+      - "--lnd.macaroondir=/home/loopserver/.lnd/data/chain/bitcoin/regtest"
+      - "--lnd.tlspath=/home/loopserver/.lnd/tls.cert"
+      - "--bitcoin.host=alice:18443"
+      - "--bitcoin.user=polaruser"
+      - "--bitcoin.password=polarpass"
+      - "--bitcoin.zmqpubrawblock=tcp://alice:28334"
+      - "--bitcoin.zmqpubrawtx=tcp://alice:29335"
+    volumes:
+      - ./regtest.polar/volumes/lnd/alice:/home/loopserver/.lnd
+  loopd:
+    image: lightninglabs/loop:v0.25.2-beta
+    extra_hosts:
+      - "carol:host-gateway"
+    restart: always
+    hostname: loopd
+    depends_on:
+      - loopserver
+    ports:
+      - "11010:11010"
+      - "8088:8081"
+    volumes:
+      - "./regtest.polar/volumes/lnd/carol:/root/.lnd"
+      - ".loop:/root/.loop"
+    command:
+      - "loopd"
+      - "--network=regtest"
+      - "--debuglevel=debug"
+      - "--server.host=loopserver:11009"
+      - "--rpclisten=0.0.0.0:11010"
+      - "--server.notls"
+      - "--lnd.host=carol:10003"
+      - "--lnd.macaroonpath=/root/.lnd/data/chain/bitcoin/regtest/admin.macaroon"
+      - "--lnd.tlspath=/root/.lnd/tls.cert"
+  liquidator:
+    container_name: liquidator
+    hostname: liquidator
+    restart: always
+    image: ghcr.io/elenpay/liquidator:0.3.11
+    extra_hosts:
+      - "localhost:host-gateway"
+    depends_on:
+      - loopd
+      - loopserver
+      - nodeguard
+    environment:
+      LNDCONNECTURIS: "lndconnect://localhost:10003?cert=MIICJTCCAcygAwIBAgIQLYfp6m1vP9wFBXOcE-UsaDAKBggqhkjOPQQDAjAxMR8wHQYDVQQKExZsbmQgYXV0b2dlbmVyYXRlZCBjZXJ0MQ4wDAYDVQQDEwVjYXJvbDAeFw0yMzAzMjkxNTM4MjBaFw0yNDA1MjMxNTM4MjBaMDExHzAdBgNVBAoTFmxuZCBhdXRvZ2VuZXJhdGVkIGNlcnQxDjAMBgNVBAMTBWNhcm9sMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEcXT4dekJnAiZWd8Pk3FgL1BSFXMRwLGSAlk7Di5hIJnIA1B_o8RWKzlPz7u3Aw5mmWHhN8B2MWMylWlWB2130KOBxTCBwjAOBgNVHQ8BAf8EBAMCAqQwEwYDVR0lBAwwCgYIKwYBBQUHAwEwDwYDVR0TAQH_BAUwAwEB_zAdBgNVHQ4EFgQUDOS-19_0LFGf62WRyaaUSLc3j98wawYDVR0RBGQwYoIFY2Fyb2yCCWxvY2FsaG9zdIIFY2Fyb2yCDnBvbGFyLW4xLWNhcm9sggR1bml4ggp1bml4cGFja2V0ggdidWZjb25uhwR_AAABhxAAAAAAAAAAAAAAAAAAAAABhwSsFQAFMAoGCCqGSM49BAMCA0cAMEQCHxYe59PCXrTtSmGsOjfQo6V-sS8j73cqWOzTQbvgI3gCIQCj7sOxnZWBwilec7t8bBXjwPgX9frv8408JW4QhNFOUg&macaroon=AgEDbG5kAvgBAwoQHsW2NwwWb2yOKFMWQQkUWhIBMBoWCgdhZGRyZXNzEgRyZWFkEgV3cml0ZRoTCgRpbmZvEgRyZWFkEgV3cml0ZRoXCghpbnZvaWNlcxIEcmVhZBIFd3JpdGUaIQoIbWFjYXJvb24SCGdlbmVyYXRlEgRyZWFkEgV3cml0ZRoWCgdtZXNzYWdlEgRyZWFkEgV3cml0ZRoXCghvZmZjaGFpbhIEcmVhZBIFd3JpdGUaFgoHb25jaGFpbhIEcmVhZBIFd3JpdGUaFAoFcGVlcnMSBHJlYWQSBXdyaXRlGhgKBnNpZ25lchIIZ2VuZXJhdGUSBHJlYWQAAAYgjpV-eOw554EPrSXPxDhQuOnnwHmEO47Hu1Uiu6EiMNY"
+      POLLINGINTERVAL: "5s"
+      RETRIESBEFOREBACKOFF: "3"
+      BACKOFFCOEFFICIENT: "0.99"
+      BACKOFFLIMIT: "0.1"
+      LOGLEVEL: "DEBUG"
+      LOGFORMAT: "text"
+      NODEGUARDHOST: "localhost:50051"
+      LOOPDCONNECTURIS: "lndconnect://loopd:11010?cert=MIICETCCAbegAwIBAgIQYC-QjkPFWwAeC6axGaKN1zAKBggqhkjOPQQDAjAyMSAwHgYDVQQKExdsb29wIGF1dG9nZW5lcmF0ZWQgY2VydDEOMAwGA1UEAxMFbG9vcGQwHhcNMjMxMTA2MTM1MzA2WhcNMjQxMjMxMTM1MzA2WjAyMSAwHgYDVQQKExdsb29wIGF1dG9nZW5lcmF0ZWQgY2VydDEOMAwGA1UEAxMFbG9vcGQwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAQvXC2d3P4P_dvXvUNdl338mIof_6V9TB5kfHGTWil1VIZajdl45fqNSRzgeT0A9cjjz1pOrHNZuSIpyUAF6HX-o4GuMIGrMA4GA1UdDwEB_wQEAwICpDATBgNVHSUEDDAKBggrBgEFBQcDATAPBgNVHRMBAf8EBTADAQH_MB0GA1UdDgQWBBRr90ZNXA_rppIZkPXVj0nMDKrONTBUBgNVHREETTBLggVsb29wZIIJbG9jYWxob3N0ggR1bml4ggp1bml4cGFja2V0ggdidWZjb25uhwR_AAABhxAAAAAAAAAAAAAAAAAAAAABhwTAqPcFMAoGCCqGSM49BAMCA0gAMEUCIE9PA1nNpDSzbMnEqkVfuiV9ed99cWJY9CJ-BnmXEgR7AiEA1V6vgDRR514KzoIikp96Ph9QdcR_H-zTCQDeouMNAd8&macaroon=AgEEbG9vcAJ3AwoQAGHXA630vU2T0CzDD30zKxIBMBoMCgRhdXRoEgRyZWFkGg8KBGxvb3ASAmluEgNvdXQaGgoLc3VnZ2VzdGlvbnMSBHJlYWQSBXdyaXRlGhUKBHN3YXASB2V4ZWN1dGUSBHJlYWQaDQoFdGVybXMSBHJlYWQAAAYg_Wb1ycUlbXUplINRViP5Phaw3MjfsnpSewUvDgBcxxI"
+      NODEGUARD_API_KEY: "ztUB+pKae3gWj/DoefHjJGV3BfjoWrFCubP+ePVRk7c="
+
+
+  nodeguard:
+    hostname: nodeguard
+    image: ghcr.io/elenpay/nodeguard:0.12.8
+    restart: always
+    depends_on:
+      - nodeguard_postgres
+      - nbxplorer
+ #    platform: linux/arm64
+ #   extra_hosts:
+ #     - "host.docker.internal:host-gateway"
+    ports:
+      - "50051:50051"
+      - "38080:38080"
+    environment:
+      BITCOIN_NETWORK: regtest
+      DEFAULT_DERIVATION_PATH: m/48'/1'
+      Logging__LogLevel__Microsoft: Warning
+      Logging__LogLevel__Microsoft__EntityFrameworkCore: Warning
+      MAXIMUM_WITHDRAWAL_BTC_AMOUNT: 21000000
+      NBXPLORER_BTCRPCURL: http://host.docker.internal:18443
+      NBXPLORER_URI: http://host.docker.internal:32838
+      TRANSACTION_CONFIRMATION_MINIMUM_BLOCKS: "6"
+      POSTGRES_CONNECTIONSTRING: Host=nodeguard_postgres;Port=5432;Database=nodeguard;Username=rw_dev;Password=rw_dev
+      PUSH_NOTIFICATIONS_ONESIGNAL_API_BASE_PATH: "https://onesignal.com/api/v1"
+      PUSH_NOTIFICATIONS_ONESIGNAL_APP_ID: ""
+      PUSH_NOTIFICATIONS_ONESIGNAL_API_TOKEN: ""
+      PUSH_NOTIFICATIONS_ONESIGNAL_ENABLED: "false" # true/false case sensitive
+      SWEEPNODEWALLETSJOB_CRON: "0 */1 * * * ?" #Every minute
+      ANCHOR_CLOSINGS_MINIMUM_SATS: 100000 # Check https://github.com/lightningnetwork/lnd/issues/6505#issuecomment-1120364460 to understand, we need 100K- sats to support anchor channel closings
+      ENABLE_HW_SUPPORT: "true" # Enables fields and features for using Hardware Wallets
+      MINIMUM_WITHDRAWAL_BTC_AMOUNT: 0.001
+      MINIMUM_CHANNEL_CAPACITY_SATS: 20000
+      COINGECKO_ENDPOINT: https://pro-api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin
+      COINGECKO_KEY: "tbd" #PLEASE FILL IT WITH YOUR OWN
+      MONITOR_WITHDRAWALS_CRON: "0 */1 * * * ?" # Every Minute
+      ENABLE_REMOTE_SIGNER: "false" #Changes the way of signing, instead of a auto-generated internal wallet, NodeGuard will sign with a remote signer function on AWS Lambda
+      #OTEL_COLLECTOR_ENDPOINT: http://host.docker.internal:4318 #gRPC endpoint for OTel collector (optional)
+      HTTP1_LISTEN_PORT: 38080
+      MEMPOOL_ENDPOINT: https://mempool.space
+      MAX_TX_FEE_RATIO: 0.1
+      FUNDSMANAGER_ENDPOINT: http://localhost:38080
+    volumes:
+      - nodeguard_data_keys_dir:/root/.aspnet/DataProtection-Keys
+  nbxplorer:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    image: ghcr.io/elenpay/nbxplorer:elenpay-develop
+    platform: linux/amd64
+    hostname: nbxplorer
+    ports:
+      - "32838:32838"
+    environment:
+      NBXPLORER_NETWORK: regtest
+      NBXPLORER_BIND: 0.0.0.0:32838
+      NBXPLORER_TRIMEVENTS: 10000
+      NBXPLORER_SIGNALFILESDIR: /datadir
+      #Keeping dbtrie for dev until it is fully removed since we would need to modify nbxplorer docker image to wait for the db to be ready
+      NBXPLORER_DBTRIE: 1
+      # NBXPLORER_POSTGRES: Host=nodeguard_postgres;Port=5432;Database=nbxplorer;Username=rw_dev;Password=rw_dev
+      NBXPLORER_CHAINS: "btc"
+      NBXPLORER_BTCRPCUSER: "polaruser"
+      NBXPLORER_BTCRPCPASSWORD: "polarpass"
+      NBXPLORER_BTCRPCURL: http://host.docker.internal:18443/
+      NBXPLORER_BTCNODEENDPOINT: host.docker.internal:19444
+    command: ["--noauth"]
+    volumes:
+      - "bitcoin_datadir:/root/.bitcoin"
+volumes:
+  postgres_data:
+  bitcoin_datadir:
+  nbxplorer_datadir:
+  nodeguard_data_keys_dir:

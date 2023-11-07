@@ -40,7 +40,7 @@ docker compose up nodeguard loopserver nodeguard_postgres loopserver -d
 docker-compose up -d
 ```
 11.  Add carol and alice nodes, take the info from polar. Make sure to point to `host.docker.internal:grpcport` of each node as endpoints, also the macaroon must be in `hex`
-12.  Create a new finance manager user and set the keys.   
-13. Create a multisig wallet with the new created key a fund it
-14. Open a channel and sign it
+12.  Create a new finance manager user and set the keys, use NodeGuard companion to ease this process.   
+13. Create a multisig wallet with the new created key and fund it with polar
+14. Open a channel and sign it using nodeguard companion
 15. Set up liquidity rules for the new channel

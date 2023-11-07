@@ -6,6 +6,7 @@ DISCLAIMER: This readme has been run and tested on macOS, it shall be equivalent
 # Requisites
 - Docker & Docker Compose
 - [Polar Lightning](https://lightningpolar.com/)
+- [NodeGuard companion](https://github.com/Elenpay/Nodeguards-Companion#importing-the-extension)
 # Setup
 Follow the steps below to setup the environment for the workshop session.
 ## 1. Clone the repository

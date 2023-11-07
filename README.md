@@ -22,7 +22,7 @@ git clone https://github.com/Elenpay/workshop-nodeguard
    ```
 5. Unzip loopd.zip to .loop
     ```
-    unzip loopd.zip -d .loop
+    unzip loopd.zip
     ```
 6. Bring up the docker-compose in the following order, wait a couple of seconds
 ```
